@@ -2,59 +2,75 @@ import { manageSubscriptionStatusChange, updateStripeCustomer } from "@/actions/
 import { stripe } from "@/lib/stripe";
 import { headers } from "next/headers";
 import Stripe from "stripe";
+import { NextResponse } from "next/server";
 
 const relevantEvents = new Set(["checkout.session.completed", "customer.subscription.updated", "customer.subscription.deleted"]);
 
-export async function POST(req: Request) {
-  const body = await req.text();
-  const sig = (await headers()).get("Stripe-Signature") as string;
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  let event: Stripe.Event;
-
-  try {
-    if (!sig || !webhookSecret) {
-      throw new Error("Webhook secret or signature missing");
-    }
-
-    event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
-  } catch (err: any) {
-    console.error(`Webhook Error: ${err.message}`);
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
-  }
-
-  if (relevantEvents.has(event.type)) {
-    try {
-      switch (event.type) {
-        case "customer.subscription.updated":
-        case "customer.subscription.deleted":
-          await handleSubscriptionChange(event);
-          break;
-
-        case "checkout.session.completed":
-          await handleCheckoutSession(event);
-          break;
-
-        default:
-          throw new Error("Unhandled relevant event!");
-      }
-    } catch (error) {
-      console.error("Webhook handler failed:", error);
-      return new Response("Webhook handler failed. View your nextjs function logs.", {
-        status: 400
-      });
-    }
-  }
-
-  return new Response(JSON.stringify({ received: true }));
+interface StripeWebhookData {
+  id: string;
+  object: string;
+  api_version: string;
+  created: number;
+  data: {
+    object: Stripe.Event.Data.Object;
+  };
+  type: string;
 }
 
-async function handleSubscriptionChange(event: Stripe.Event) {
+export async function POST(req: Request) {
+  const body = await req.text();
+  const headersList = await headers();
+  const signature = headersList.get("stripe-signature")!;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+
+  try {
+    const event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      webhookSecret
+    ) as StripeWebhookData;
+
+    if (relevantEvents.has(event.type)) {
+      try {
+        switch (event.type) {
+          case "customer.subscription.updated":
+          case "customer.subscription.deleted":
+            await handleSubscriptionChange(event);
+            break;
+
+          case "checkout.session.completed":
+            await handleCheckoutSession(event);
+            break;
+
+          default:
+            throw new Error("Unhandled relevant event!");
+        }
+      } catch (error) {
+        console.error("Webhook handler failed:", error);
+        return NextResponse.json(
+          { error: "Webhook handler failed. View your nextjs function logs." },
+          { status: 400 }
+        );
+      }
+    }
+
+    return NextResponse.json({ received: true });
+  } catch (error: unknown) {
+    console.error(`Webhook Error: ${(error as Error).message}`);
+    return NextResponse.json(
+      { error: "Invalid signature" },
+      { status: 400 }
+    );
+  }
+}
+
+async function handleSubscriptionChange(event: StripeWebhookData) {
   const subscription = event.data.object as Stripe.Subscription;
   const productId = subscription.items.data[0].price.product as string;
   await manageSubscriptionStatusChange(subscription.id, subscription.customer as string, productId);
 }
 
-async function handleCheckoutSession(event: Stripe.Event) {
+async function handleCheckoutSession(event: StripeWebhookData) {
   const checkoutSession = event.data.object as Stripe.Checkout.Session;
   if (checkoutSession.mode === "subscription") {
     const subscriptionId = checkoutSession.subscription as string;
