@@ -1,9 +1,17 @@
+/**
+ * 用户资料相关的数据库操作
+ */
+
 "use server";
 
 import { db } from "@/db/db";
 import { eq } from "drizzle-orm";
 import { InsertProfile, profilesTable, SelectProfile } from "../schema";
 
+/**
+ * 创建用户资料
+ * @param data - 用户资料数据
+ */
 export const createProfile = async (data: InsertProfile) => {
   try {
     const [newProfile] = await db.insert(profilesTable).values(data).returning();
@@ -14,6 +22,10 @@ export const createProfile = async (data: InsertProfile) => {
   }
 };
 
+/**
+ * 根据用户 ID 获取资料
+ * @param userId - 用户 ID
+ */
 export const getProfileByUserId = async (userId: string) => {
   try {
     const [profile] = await db
