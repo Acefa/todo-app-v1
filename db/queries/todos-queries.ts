@@ -16,9 +16,10 @@ export const createTodo = async (data: InsertTodo) => {
 
 export const getTodos = async (userId: string): Promise<SelectTodo[]> => {
   try {
-    return db.query.todos.findMany({
-      where: eq(todosTable.userId, userId)
-    });
+    return await db
+      .select()
+      .from(todosTable)
+      .where(eq(todosTable.userId, userId));
   } catch (error) {
     console.error("Error getting todos:", error);
     throw new Error("Failed to get todos");
@@ -27,9 +28,10 @@ export const getTodos = async (userId: string): Promise<SelectTodo[]> => {
 
 export const getTodo = async (id: string) => {
   try {
-    const todo = await db.query.todos.findFirst({
-      where: eq(todosTable.id, id)
-    });
+    const [todo] = await db
+      .select()
+      .from(todosTable)
+      .where(eq(todosTable.id, id));
     if (!todo) {
       throw new Error("Todo not found");
     }
