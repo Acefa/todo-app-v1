@@ -9,7 +9,7 @@ const getMembershipStatus = (status: Stripe.Subscription.Status, membership: Mem
   switch (status) {
     case "active":
     case "trialing":
-      return membership;
+      return "pro";
     case "canceled":
     case "incomplete":
     case "incomplete_expired":
@@ -24,7 +24,7 @@ const getMembershipStatus = (status: Stripe.Subscription.Status, membership: Mem
 
 const getSubscription = async (subscriptionId: string) => {
   return stripe.subscriptions.retrieve(subscriptionId, {
-    expand: ["default_payment_method"]
+    expand: ["default_payment_method", "items.data.price.product"]
   });
 };
 
@@ -35,10 +35,13 @@ export const updateStripeCustomer = async (userId: string, subscriptionId: strin
     }
 
     const subscription = await getSubscription(subscriptionId);
+    const membershipStatus = getMembershipStatus(subscription.status, "free");
 
     const updatedProfile = await updateProfile(userId, {
       stripeCustomerId: customerId,
-      stripeSubscriptionId: subscription.id
+      stripeSubscriptionId: subscription.id,
+      membership: membershipStatus,
+      updatedAt: new Date()
     });
 
     if (!updatedProfile) {
@@ -59,18 +62,12 @@ export const manageSubscriptionStatusChange = async (subscriptionId: string, cus
     }
 
     const subscription = await getSubscription(subscriptionId);
-
-    const product = await stripe.products.retrieve(productId);
-    const membership = product.metadata.membership as MembershipStatus;
-    if (!["free", "pro"].includes(membership)) {
-      throw new Error(`Invalid membership type in product metadata: ${membership}`);
-    }
-
-    const membershipStatus = getMembershipStatus(subscription.status, membership);
+    const membershipStatus = getMembershipStatus(subscription.status, "pro");
 
     await updateProfileByStripeCustomerId(customerId, {
       stripeSubscriptionId: subscription.id,
-      membership: membershipStatus
+      membership: membershipStatus,
+      updatedAt: new Date()
     });
 
     return membershipStatus;
