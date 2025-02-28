@@ -28,13 +28,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <ClerkProvider>
-      <html lang="en">
-        <body className={inter.className}>
-          <Providers
-            attribute="class"
-            defaultTheme="dark"
-            disableTransitionOnChange
-          >
+      <html lang="en" suppressHydrationWarning>
+        <body className={`${inter.className}`}>
+          <Providers>
             <Header />
             {children}
             <Toaster />
