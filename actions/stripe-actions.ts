@@ -22,14 +22,26 @@ const getMembershipStatus = (status: Stripe.Subscription.Status, membership: Mem
 export async function updateStripeCustomer(userId: string, subscriptionId: string, customerId: string) {
   await updateProfile(userId, {
     stripeSubscriptionId: subscriptionId,
-    stripeCustomerId: customerId
+    stripeCustomerId: customerId,
+    membership: "pro"  // 新客户订阅时设置为 pro
   });
 }
 
 export async function manageSubscriptionStatusChange(subscriptionId: string, customerId: string, productId: string) {
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  const profile = await updateProfile(customerId, {
-    membership: getMembershipStatus(subscription.status, "free")
-  });
-  return profile;
+  try {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+      expand: ['customer', 'items.data.price']
+    });
+
+    await updateProfile(customerId, {
+      membership: getMembershipStatus(subscription.status, "free"),
+      stripeSubscriptionId: subscription.id,
+      stripeCustomerId: subscription.customer as string,
+      updatedAt: new Date()
+    });
+
+  } catch (error) {
+    console.error('Error updating subscription:', error);
+    throw new Error('Failed to update subscription status');
+  }
 } 
