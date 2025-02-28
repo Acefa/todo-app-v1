@@ -1,6 +1,7 @@
 import { manageSubscriptionStatusChange, updateStripeCustomer } from "@/actions/stripe-actions";
 import { stripe } from "@/lib/stripe";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Stripe from "stripe";
 
 const relevantEvents = new Set(["checkout.session.completed", "customer.subscription.updated", "customer.subscription.deleted"]);
@@ -50,7 +51,11 @@ async function handleCheckoutSession(event: Stripe.Event) {
   const checkoutSession = event.data.object as Stripe.Checkout.Session;
   if (checkoutSession.mode === "subscription") {
     const subscriptionId = checkoutSession.subscription as string;
-    await updateStripeCustomer(checkoutSession.client_reference_id as string, subscriptionId, checkoutSession.customer as string);
+    await updateStripeCustomer(
+      checkoutSession.client_reference_id as string,
+      subscriptionId,
+      checkoutSession.customer as string
+    );
 
     const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
       expand: ["default_payment_method"]
@@ -58,5 +63,12 @@ async function handleCheckoutSession(event: Stripe.Event) {
 
     const productId = subscription.items.data[0].price.product as string;
     await manageSubscriptionStatusChange(subscription.id, subscription.customer as string, productId);
+
+    // 重定向到成功页面或原页面
+    if (checkoutSession.success_url) {
+      redirect(checkoutSession.success_url);
+    } else {
+      redirect("/");  // 默认重定向到首页
+    }
   }
 }
