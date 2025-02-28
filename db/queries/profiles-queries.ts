@@ -16,10 +16,10 @@ export const createProfile = async (data: InsertProfile) => {
 
 export const getProfileByUserId = async (userId: string) => {
   try {
-    const profile = await db.query.profiles.findFirst({
-      where: eq(profilesTable.userId, userId)
-    });
-
+    const [profile] = await db
+      .select()
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId));
     return profile;
   } catch (error) {
     console.error("Error getting profile by user ID:", error);
@@ -28,7 +28,12 @@ export const getProfileByUserId = async (userId: string) => {
 };
 
 export const getAllProfiles = async (): Promise<SelectProfile[]> => {
-  return db.query.profiles.findMany();
+  try {
+    return await db.select().from(profilesTable);
+  } catch (error) {
+    console.error("Error getting all profiles:", error);
+    throw new Error("Failed to get all profiles");
+  }
 };
 
 export const updateProfile = async (userId: string, data: Partial<InsertProfile>) => {
